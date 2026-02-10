@@ -120,6 +120,7 @@ class MicrolensingLightCurveFromLensModel(object):
     def generate_point_source_microlensing_magnitudes(
         self,
         time,
+        magmaps_images=None, 
     ):
         """Generate microlensing lightcurve magnitudes normalized to the mean
         magnification for various source morphologies. For single source only,
@@ -147,6 +148,7 @@ class MicrolensingLightCurveFromLensModel(object):
                 time_array,
                 lightcurve_type="magnitude",
                 num_lightcurves=1,
+                magmaps_images=magmaps_images, 
             )
         )
 
@@ -194,6 +196,7 @@ class MicrolensingLightCurveFromLensModel(object):
         time,
         lightcurve_type="magnitude",  # 'magnitude' or 'magnification'
         num_lightcurves=1,  # Number of lightcurves to generate
+        magmaps_images=None,
     ):
         """Generate lightcurves for one single point source with certain size,
         but for all images of that source based on the lens model. The point
@@ -235,7 +238,8 @@ class MicrolensingLightCurveFromLensModel(object):
         """
 
         # generate magnification maps for each image of the source
-        magmaps_images = self.generate_magnification_maps_from_microlensing_params()
+        if magmaps_images is None:
+            magmaps_images = self.generate_magnification_maps_from_microlensing_params()
 
         if (isinstance(time, np.ndarray) or isinstance(time, list)) and len(time) > 1:
             lightcurve_duration = time[-1] - time[0]
@@ -275,8 +279,8 @@ class MicrolensingLightCurveFromLensModel(object):
                     lightcurve_type=lightcurve_type,
                     effective_transverse_velocity=eff_trv_vel_images[i],
                     num_lightcurves=num_lightcurves,
-                    x_start_position=None,
-                    y_start_position=None,
+                    x_start_position=0,
+                    y_start_position=0,
                     phi_travel_direction=eff_trv_vel_angles_images[i],
                 )
             )

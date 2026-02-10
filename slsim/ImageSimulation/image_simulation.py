@@ -399,7 +399,7 @@ def point_source_image_at_time(
         ra_image_values = image_data["ra_image"]
         dec_image_values = image_data["dec_image"]
         variable_mag = lens_class.point_source_magnitude(
-            band=band, lensed=True, time=time
+            band=band, lensed=True, time=time, microlensing=True
         )
         variable_mag = np.nan_to_num(variable_mag, nan=np.inf)
         variable_mag_list = np.concatenate(variable_mag)

@@ -9,6 +9,7 @@ def load_in_rubin_sim(
     ra,
     dec,
     columns=["filter", "observationStartMJD", "fiveSigmaDepth", "visitExposureTime"],
+    sql=''
 ):
     baseline_file = get_baseline()
     name = os.path.basename(baseline_file).replace(".db", "")
@@ -20,7 +21,7 @@ def load_in_rubin_sim(
     # columns at:  https://rubin-sim.lsst.io/rs_scheduler/output_schema.html
     metric = maf.metrics.PassMetric(cols=columns)  # mag_zero_point
     # Select all the visits. Could be something like "filter='r'", "night < 365", etc
-    sql = ""
+    sql = sql
     slicer = maf.slicers.UserPointsSlicer(ra=ra, dec=dec)
     bundle_list.append(maf.MetricBundle(metric, slicer, sql, run_name=name))
     bd = maf.metricBundles.make_bundles_dict_from_list(bundle_list)
@@ -42,8 +43,9 @@ def get_rubin_cadence(
         "visitExposureTime",
         "seeingFwhmEff",
     ],
+    sql=''
 ):
-    bundle_list = load_in_rubin_sim(ra, dec, columns)
+    bundle_list = load_in_rubin_sim(ra, dec, columns, sql=sql)
     lsst_cadence = pd.DataFrame(bundle_list[0].metric_values[0])
     lsst_cadence["observationStartMJD"] = lsst_cadence["observationStartMJD"] - np.min(
         lsst_cadence["observationStartMJD"]
