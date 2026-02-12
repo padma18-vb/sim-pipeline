@@ -415,7 +415,7 @@ def point_source_image_at_time(
         )
     else:
         point_source_image = np.zeros((num_pix, num_pix))
-    return point_source_image
+    return point_source_image, variable_mag
 
 
 def point_source_image_with_variability(
@@ -622,7 +622,7 @@ def lens_image(
             transform_pix2angle=transform_pix2angle,
         )
     else:
-        image_ps = point_source_image_at_time(
+        image_ps, ps_mag = point_source_image_at_time(
             lens_class=lens_class,
             band=band,
             mag_zero_point=mag_zero_point,
@@ -632,7 +632,7 @@ def lens_image(
             transform_pix2angle=transform_pix2angle,
             time=t_obs,
         )
-
+        
     image_ps = np.nan_to_num(image_ps, nan=0)  # Replace NaN if present with 0
     image = convolved_deflector_source
     if with_ps:
@@ -744,3 +744,188 @@ def lens_image_series(
         image_series.append(image)
 
     return image_series
+
+
+def point_source_image_from_magnitude(
+    lens_class,
+    band,
+    mag_zero_point,
+    delta_pix,
+    num_pix,
+    psf_kernel,
+    transform_pix2angle,
+    variable_mag,
+):
+    """Creates lensed point source images using precomputed magnitudes.
+
+    :param lens_class: Lens() object
+    :param band: imaging band
+    :param mag_zero_point: magnitude zero point in band
+    :param delta_pix: pixel scale of image generated
+    :param num_pix: number of pixels per axis
+    :param psf_kernel: psf kernel for the given exposure
+    :param transform_pix2angle: transformation matrix (2x2) of pixels
+        into coordinate displacements
+    :param variable_mag: precomputed magnitudes for point sources at a
+        single observation time
+    :return: point source image
+    """
+
+    kwargs_model, kwargs_params = lens_class.lenstronomy_kwargs(band=band)
+    kwargs_ps = kwargs_params["kwargs_ps"]
+    data_class = image_data_class(
+        lens_class, band, mag_zero_point, delta_pix, num_pix, transform_pix2angle
+    )
+    if psf_kernel is None:
+        psf_class = PSF(psf_type="NONE")
+    else:
+        psf_class = PSF(psf_type="PIXEL", kernel_point_source=psf_kernel)
+
+    if len(kwargs_ps) > 0:
+        image_data = point_source_coordinate_properties(
+            lens_class=lens_class,
+            band=band,
+            mag_zero_point=mag_zero_point,
+            delta_pix=delta_pix,
+            num_pix=num_pix,
+            transform_pix2angle=transform_pix2angle,
+        )
+        ra_image_values = image_data["ra_image"]
+        dec_image_values = image_data["dec_image"]
+        variable_mag = np.nan_to_num(variable_mag, nan=np.inf)
+        variable_amp = magnitude_to_amplitude(variable_mag, mag_zero_point)
+        rendering_class = PointSourceRendering(
+            pixel_grid=data_class, supersampling_factor=1, psf=psf_class
+        )
+        point_source_image = rendering_class.point_source_rendering(
+            ra_image_values,
+            dec_image_values,
+            variable_amp,
+        )
+    else:
+        point_source_image = np.zeros((num_pix, num_pix))
+    return point_source_image
+
+
+def lens_image_series_precomputed_mags(
+    lens_class,
+    band,
+    mag_zero_point,
+    num_pix,
+    psf_kernel,
+    transform_pix2angle,
+    exposure_time=None,
+    t_obs=None,
+    std_gaussian_noise=None,
+    with_source=True,
+    with_ps=True,
+    with_deflector=True,
+    add_noise=True,
+    gain=0.7,
+    single_visit_mag_zero_points={
+        "g": 32.33,
+        "r": 32.17,
+        "i": 31.85,
+        "z": 31.45,
+        "y": 30.63,
+    },
+):
+    """Creates lens image series while computing source magnitudes once.
+
+    This function accepts the same inputs as ``lens_image_series`` and calls
+    ``lens_class.point_source_magnitude`` a single time using the full
+    ``t_obs`` array. It then applies per-observation variations in a loop.
+
+    :return: list of series of images of a lens, and list of magnitudes
+    """
+
+    variable_mags = None
+    if t_obs is not None:
+        variable_mags = lens_class.point_source_magnitude(
+            band=band, lensed=True, time=t_obs, microlensing=True
+        )[0]
+    variable_mags = np.array(variable_mags).T
+
+    image_series = []
+    mags = []
+
+    for idx, (
+        time,
+        psf_kern,
+        mag_zero,
+        transf_matrix,
+        expo_time,
+        std_gauss,
+    ) in enumerate(
+        zip(
+            t_obs,
+            psf_kernel,
+            mag_zero_point,
+            transform_pix2angle,
+            exposure_time,
+            std_gaussian_noise,
+        )
+    ):
+        delta_pix = transformmatrix_to_pixelscale(transf_matrix)
+        deflector_source = sharp_image(
+            lens_class=lens_class,
+            band=band,
+            mag_zero_point=mag_zero,
+            delta_pix=delta_pix,
+            num_pix=num_pix,
+            with_source=with_source,
+            with_deflector=with_deflector,
+        )
+        if psf_kern is not None:
+            convolved_deflector_source = convolved_image(
+                image=deflector_source, psf_kernel=psf_kern
+            )
+        else:
+            convolved_deflector_source = deflector_source
+
+        if time is None:
+            image_ps = point_source_image_without_variability(
+                lens_class=lens_class,
+                band=band,
+                mag_zero_point=mag_zero,
+                delta_pix=delta_pix,
+                num_pix=num_pix,
+                psf_kernel=psf_kern,
+                transform_pix2angle=transf_matrix,
+            )
+            mag_at_time = None
+        else:
+            mag_at_time = variable_mags[idx]
+            image_ps = point_source_image_from_magnitude(
+                lens_class=lens_class,
+                band=band,
+                mag_zero_point=mag_zero,
+                delta_pix=delta_pix,
+                num_pix=num_pix,
+                psf_kernel=psf_kern,
+                transform_pix2angle=transf_matrix,
+                variable_mag=mag_at_time,
+            )
+
+        image_ps = np.nan_to_num(image_ps, nan=0)
+        image = convolved_deflector_source
+        if with_ps:
+            image += image_ps
+        if expo_time is not None and add_noise:
+            final_image = image_plus_poisson_noise(
+                image=image,
+                exposure_time=expo_time,
+                gain=gain,
+                coadd_zero_point=mag_zero,
+                single_visit_zero_point=single_visit_mag_zero_points[band],
+            )
+        else:
+            final_image = image
+        if std_gauss is not None and add_noise:
+            gaussian_noise = np.random.normal(0, std_gauss, final_image.shape)
+            final_image = final_image + gaussian_noise
+
+        image_series.append(final_image)
+        mags.append(mag_at_time)
+
+    return image_series, mags

@@ -160,6 +160,7 @@ class Quasar(SourceBase):
 
                 # determine mean magnitudes for each band
                 mean_magnitudes = self.agn_class.get_mean_mags(speclite_names)
+                # print('mean_magnitudes: ', mean_magnitudes)
                 # add the offset obtained from AGILE
                 mean_magnitudes_with_offset = get_mag_with_color_offset(
                     mean_magnitudes,
@@ -167,6 +168,7 @@ class Quasar(SourceBase):
                     self.redshift,
                     self.source_dict["M_i"],
                 )
+                # print('mean_magnitudes_with_offset: ', mean_magnitudes_with_offset)
 
                 # Our input quasar catalog has magnitude only in i band. So, Agn
                 # class has computed mean magnitude of the given quasar in all lsst
@@ -304,13 +306,17 @@ def get_mag_with_color_offset(mean_mags, band_list, redshift, abs_mag_i):
     min_dist_ind = np.argmin(sum_of_squared_differences)
     selected_sample = agile_colors.iloc[min_dist_ind]
     band_to_mag = dict(zip(band_list, mean_mags))
+    # print('what does the dict look like before offset: ', band_to_mag)
     band_to_mag_with_offset = {"i": band_to_mag["i"]}
     band_to_mag_with_offset["z"] = band_to_mag_with_offset["i"] - selected_sample[5]
     band_to_mag_with_offset["r"] = band_to_mag_with_offset["i"] + selected_sample[4]
     band_to_mag_with_offset["g"] = band_to_mag_with_offset["r"] + selected_sample[3]
     band_to_mag_with_offset["u"] = band_to_mag_with_offset["g"] + selected_sample[2]
     band_to_mag_with_offset["y"] = band_to_mag_with_offset["z"] - selected_sample[6]
-    return list(band_to_mag_with_offset.values())
+    final_dict = {k: band_to_mag_with_offset[k] for k in band_to_mag if k in band_to_mag}
+    # print('dict after offset: ',final_dict)
+    # print('final output:', list(final_dict.values()))
+    return list(final_dict.values())
 
 
 def add_mean_mag_to_source_table(sourcedict, mean_mags, band_list):

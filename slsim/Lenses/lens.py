@@ -717,8 +717,12 @@ class Lens(LensedSystemBase):
                         source_index=source_index,
                         kwargs_microlensing=kwargs_microlensing,
                     )
-                    lensed_variable_magnitude += microlensing_magnitudes
-
+                    # print(lensed_variable_magnitude, time, microlensing_magnitudes)
+                    if lensed_variable_magnitude.shape!=microlensing_magnitudes.shape:
+                        lensed_variable_magnitude = lensed_variable_magnitude + microlensing_magnitudes.reshape(-1, 1)
+                    else:
+                        lensed_variable_magnitude += microlensing_magnitudes
+                
                 return lensed_variable_magnitude
             else:
                 source_mag_unlensed = self.source(source_index).point_source_magnitude(
@@ -1616,8 +1620,8 @@ class Lens(LensedSystemBase):
             light properties.
         """
         # TODO: Extend this to work for multiple plane sources
-        print('i mag before anything: ', self.point_source_magnitude('i', lensed=False))
-        print('lensed i mag before anything: ', self.point_source_magnitude('i', lensed=True))
+        # print('i mag before anything: ', self.point_source_magnitude('i', lensed=False))
+        # print('lensed i mag before anything: ', self.point_source_magnitude('i', lensed=True))
         lens_index = index
         if df is None:
             df = pd.DataFrame()
@@ -1654,6 +1658,8 @@ class Lens(LensedSystemBase):
                             df.loc[lens_index, f"point_source_light_{b}_{key}_{j}"] = (
                                 safe_value(v)
                             )
+            
+            
 
             # store source light properties
             for i in self.source_light_model_lenstronomy(b)[1]["kwargs_source"]:
@@ -1672,10 +1678,12 @@ class Lens(LensedSystemBase):
         )
         ps_times = self.point_source_arrival_times()[0]
         magnifications = self.point_source_magnification()[0]
+        magnitudes =  self.point_source_magnitude(b, lensed=True)[0]
         # self.image_number = len(ps_times)
         for i in range(self.image_number[0]):
             df.loc[lens_index, f"image_{i}_arrival_time"] = ps_times[i]
             df.loc[lens_index, f"point_source_magnification_{i}"] = magnifications[i]
+            df.loc[lens_index, f"point_source_light_{b}_magnitude_{i}"] = magnitudes[i]
         df.loc[lens_index, "num_ps_images"] = safe_value(self.image_number[0])
 
         micro_lens_params = (
@@ -1717,6 +1725,6 @@ class Lens(LensedSystemBase):
         df.loc[lens_index, "inclination_angle"] = self.source(
             0
         )._source._point_source.agn_class.kwargs_model["inclination_angle"]
-        print('i mag after everything: ', self.point_source_magnitude('i', lensed=False))
-        print('lensed i mag after everything: ', self.point_source_magnitude('i', lensed=True))
+        # print('i mag after everything: ', self.point_source_magnitude('i', lensed=False))
+        # print('lensed i mag after everything: ', self.point_source_magnitude('i', lensed=True))
         return df
